@@ -1,0 +1,48 @@
+# Runtime configuration. Model is config, not code (spec R2.7).
+# Secrets never live here; they come from the environment (see .env.example).
+
+# Each model is a (provider, id) pair. `provider` selects the client implementation:
+#   anthropic : Anthropic API. PDF path sends the PDF as a document block.
+#   ollama    : local Ollama server (OLLAMA_HOST, default http://localhost:11434).
+#               PDF path renders pages to images; the model must support vision.
+# Results tables use the alias (large / small / local) as the row label.
+[models.large]
+provider = "anthropic"
+id = "claude-opus-5"
+effort = "high"
+
+[models.small]
+provider = "anthropic"
+id = "claude-haiku-4-5"
+
+[models.local]
+provider = "ollama"
+id = "gemma4:12b"     # 7.6 GB, vision, 256K context. Use gemma4:26b on a 48 GB+ card.
+num_ctx = 65536       # Ollama defaults to a small context; a 25-page PDF needs more.
+
+[extract]
+max_tokens = 16000
+# One retry with validation errors fed back, then give up (spec R2.5).
+max_repairs = 1
+# Evidence quote must fuzzy-match the PDF text layer at or above this ratio (spec R2.4).
+evidence_min_ratio = 0.90
+# Page render DPI for image-based PDF paths (ollama). 110 keeps a page under ~1 MP.
+render_dpi = 110
+
+[corpus]
+sector = "Residential"
+min_startdate = "2023-01-01"
+max_pages = 25
+candidates = 40
+target_gold = 30
+
+[paths]
+pdfs = "corpus/pdfs"
+manifest = "corpus/manifest.csv"
+labels_draft = "labels/draft"
+labels_gold = "labels/gold"
+splits = "labels/splits.json"
+prompts = "prompts"
+cache = "cache"
+results = "results"
+reports = "reports"

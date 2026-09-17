@@ -1,0 +1,75 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Belt and braces: even a mis-marked test cannot reach an API from CI.
+  ANTHROPIC_API_KEY: ""
+  OPENEI_API_KEY: ""
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --all-groups --all-extras --frozen
+
+      - name: Lint
+        run: |
+          uv run ruff check --output-format=github .
+          uv run ruff format --check .
+
+      - name: Typecheck
+        run: uv run mypy
+
+      - name: Test (no LLM, no network)
+        run: uv run pytest --cov --cov-report=xml --cov-report=term -m "not llm and not network"
+
+      - name: Config is loadable
+        run: uv run tariff version
+
+  attribution:
+    # Public repo, single human author: fail the PR if any commit carries an AI trailer.
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check commit messages
+        run: |
+          set -e
+          bad=$(git log --format='%H%n%B%n---' "origin/${{ github.base_ref }}..HEAD" \
+            | grep -Ei 'co-authored-by:.*(claude|anthropic|copilot|chatgpt|openai|gemini|cursor)|claude-session:|generated with \[?claude code|🤖 generated with' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::AI attribution trailer found in commit history:"; echo "$bad"; exit 1
+          fi
+
+  secrets:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
